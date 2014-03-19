@@ -14,6 +14,7 @@ import (
 )
 
 type Level int
+type Type int
 
 const (
 	Fshortfile = 1 << iota // show filename:lineno
@@ -34,9 +35,10 @@ const (
 	LFatal
 )
 
-var (
-	DevLog = NewLogger(os.Stdout, "").SetFlags(Fdevflag).SetLevel(LDebug)
-	StdLog = NewLogger(os.Stderr, "").SetFlags(Fstdflag).SetLevel(LInfo)
+const (
+	TStdout Type = iota
+	TFile
+	TRedisBackend
 )
 
 var levels = []string{
@@ -58,7 +60,6 @@ var colors = []color.Paint{
 var mu = &sync.Mutex{}
 
 type Logger struct {
-	out         io.Writer
 	level       Level
 	writer      io.Writer
 	flags       int
@@ -66,27 +67,60 @@ type Logger struct {
 	colorEnable bool
 }
 
-// Default LogLevel Debug
-func NewFileLogger(filename string) (log *Logger, err error) {
-	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
-	if err != nil {
-		return
-	}
-	return NewLogger(fd).SetFlags(Fdevflag).SetLevel(LDebug), nil
+var glogger *Logger
+var once sync.Once
+
+func init() {
+	once.Do(initLogger)
 }
 
-// default level is debug
-func NewLogger(out io.Writer, prefix ...string) *Logger {
-	if out == nil {
-		out = os.Stdout
-	}
+func initLogger() {
+	glogger = newLogger()
+}
+
+func GetLogger() (logger *Logger) {
+	return glogger
+}
+
+//Return default stdout no prefix info level logger
+func newLogger() (logger *Logger) {
 	return &Logger{
 		level:       LInfo,
-		writer:      out,
-		colorEnable: runtime.GOOS != "windows" && isTermOutput(), // TODO: isTemOutput is not so good
+		writer:      os.Stdout,
+		colorEnable: runtime.GOOS != "windows" && isTermOutput(),
 		flags:       Fstdflag,
-		prefix:      strings.Join(prefix, " "),
+		prefix:      "",
 	}
+}
+
+func (l *Logger) SetLoggerBackend(t Type, cmd string) error {
+	switch t {
+	case TStdout:
+		l.writer = os.Stdout
+		return nil
+	case TFile:
+		fd, err := os.OpenFile(cmd, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
+		if err != nil {
+			return nil
+		}
+		l.writer = fd
+		return nil
+	case TRedisBackend:
+		//TODO
+		return nil
+	default:
+		return nil
+
+	}
+}
+
+func (l *Logger) SetPrefix(prefix string) *Logger {
+	l.prefix = prefix
+	return l
+}
+
+func (l *Logger) Prefix() string {
+	return l.prefix
 }
 
 // set flags to change klog output style

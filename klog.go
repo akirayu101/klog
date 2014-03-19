@@ -65,6 +65,7 @@ type Logger struct {
 	flags       int
 	prefix      string
 	colorEnable bool
+	loggerType  Type
 }
 
 var glogger *Logger
@@ -90,6 +91,7 @@ func newLogger() (logger *Logger) {
 		colorEnable: runtime.GOOS != "windows" && isTermOutput(),
 		flags:       Fstdflag,
 		prefix:      "",
+		loggerType:  TStdout,
 	}
 }
 
@@ -97,6 +99,7 @@ func (l *Logger) SetLoggerBackend(t Type, cmd string) error {
 	switch t {
 	case TStdout:
 		l.writer = os.Stdout
+		l.loggerType = TStdout
 		return nil
 	case TFile:
 		fd, err := os.OpenFile(cmd, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
@@ -104,9 +107,16 @@ func (l *Logger) SetLoggerBackend(t Type, cmd string) error {
 			return nil
 		}
 		l.writer = fd
+		l.loggerType = TFile
 		return nil
 	case TRedisBackend:
-		//TODO
+		r, err := GenResidBackend(cmd, "", 0)
+		if err != nil {
+			return err
+		}
+
+		l.writer = r
+		l.loggerType = TRedisBackend
 		return nil
 	default:
 		return nil
@@ -187,18 +197,25 @@ func (l *Logger) write(level Level, format string, a ...interface{}) (n int, err
 	} else {
 		outstr = outstr + sep + fmt.Sprintf(format, a...)
 	}
-	if !strings.HasSuffix(outstr, "\n") {
-		outstr += "\n"
-	}
 
-	if l.colorEnable && l.flags&Fcolor != 0 {
-		brush := color.NewBrush("", colors[int(level)])
-		outstr = brush(outstr)
+	if l.loggerType != TRedisBackend {
+		if !strings.HasSuffix(outstr, "\n") {
+			outstr += "\n"
+		}
+
+		if l.colorEnable && l.flags&Fcolor != 0 {
+			brush := color.NewBrush("", colors[int(level)])
+			outstr = brush(outstr)
+		}
 	}
 
 	mu.Lock()
 	defer mu.Unlock()
-	return l.writer.Write([]byte(prefix + sep + outstr))
+	if l.loggerType != TRedisBackend {
+		return l.writer.Write([]byte(prefix + sep + outstr))
+	} else {
+		return l.writer.Write([]byte(levelName + "\t" + outstr))
+	}
 }
 
 func (l *Logger) Debug(v ...interface{}) {

@@ -1,6 +1,7 @@
 package klog
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
@@ -47,4 +48,10 @@ func TestSetLevel(t *testing.T) {
 	l.SetLevel(LInfo)
 	l.Debug("dddd")
 	l.Info("iiii")
+}
+
+func TestRedis(t *testing.T) {
+	r, err := GenResidBackend("127.0.0.1:6379", "", 0)
+	fmt.Println(err)
+	r.Write([]byte("Warning" + "\t" + "this is waring log"))
 }

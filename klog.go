@@ -254,3 +254,15 @@ func (l *Logger) Fatal(v ...interface{}) {
 	l.write(LFatal, "", v...)
 	os.Exit(1)
 }
+
+func (l *Logger) Printf(fmt string, v ...interface{}) {
+	l.write(LInfo, fmt, v...)
+}
+
+func (l *Logger) Println(v ...interface{}) {
+	l.write(LInfo, "", v...)
+}
+
+func (l *Logger) Print(v ...interface{}) {
+	l.write(LInfo, "", v...)
+}
